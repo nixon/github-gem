@@ -264,3 +264,40 @@ command :search do |query|
     puts "No results found"
   end
 end
+
+desc "Fetch a specified pull request and rebase it to the current tip"
+usage "github fetch-pull [pullRequestId]"
+command :'fetch-pull' do |n|
+  user, repo = nil,nil
+  # figure out the user+repo name from git-remote
+  git("remote -v").split("\n").each do |line|
+    m = /git@github\.com:([^\/]+)\/(.+)\.git/.match(line)
+    if m
+      user = m[1]
+      repo = m[2]
+    end
+  end
+  die "Cannot infer repository from git-remote" unless user && repo
+
+  # pull in the suggested head and rebase
+  query = [user, repo, n].compact.join("/")
+  pull_url = "https://github.com/api/v2/json/pulls/#{URI.escape query}"
+  if github_token
+    data = JSON.parse(`curl -s -L -F 'login=#{github_user}' -F 'token=#{github_token}' #{pull_url}`)
+  else
+    data = JSON.parse(open(pull_url).read)
+  end
+  head = data['pull']['head']
+  tip = git "rev-parse HEAD"
+  die "appears to be already merged" if head['repository'] == nil
+  if github_token
+    repo_owner = head['repository']['owner']
+    repo_name = head['repository']['name']
+    repo_url = "git@github.com:#{repo_owner}/#{repo_name}"
+  else
+    repo_url = head['repository']['url']
+  end
+  pgit "fetch #{repo_url}.git #{head['ref']}:pull-#{n}"
+  pgit "checkout pull-#{n}"
+  pgit "rebase #{tip}"
+end
