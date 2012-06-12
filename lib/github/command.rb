@@ -83,7 +83,11 @@ module GitHub
       end
       token
     end
-    
+
+    def oauth_token
+      git("config --get github.oauth")
+    end
+
     def request_github_credentials
       puts "Please enter your GitHub credentials:"
       user = highline.ask("Username: ") while user.nil? || user.empty?

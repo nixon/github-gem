@@ -299,24 +299,22 @@ command :'fetch-pull' do |n,action|
   die "Cannot infer repository from git-remote" unless user && repo
 
   # pull in the suggested head and rebase
-  query = [user, repo, n].compact.join("/")
-  pull_url = "https://github.com/api/v2/json/pulls/#{URI.escape query}"
-  if github_token
-    data = JSON.parse(`curl -s -L -F 'login=#{github_user}' -F 'token=#{github_token}' #{pull_url}`)
+  pull_url = "https://api.github.com/repos/#{user}/#{repo}/pulls/#{n}"
+  if oauth_token
+    pull_url = "#{pull_url}?access_token=#{oauth_token}"
+    data = JSON.parse(`curl -s -L #{pull_url}`)
   else
     data = JSON.parse(open(pull_url).read)
   end
-  head = data['pull']['head']
+  head = data['head']
   tip = git "rev-parse HEAD"
-  die "appears to be already merged" if head['repository'] == nil
+  die "appears to be already merged" if head['repo'] == nil
   if github_token
-    repo_owner = head['repository']['owner']
-    repo_name = head['repository']['name']
-    repo_url = "git@github.com:#{repo_owner}/#{repo_name}"
+    repo_url = head['repo']['ssh_url']
   else
-    repo_url = head['repository']['url']
+    repo_url = head['repo']['url']
   end
-  pgit "fetch #{repo_url}.git #{head['ref']}:pull-#{n}"
+  pgit "fetch #{repo_url} #{head['ref']}:pull-#{n}"
   pgit "checkout pull-#{n}"
   pgit "#{action} #{tip}" if ["rebase", "merge"].include?(action)
 end
